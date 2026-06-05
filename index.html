@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OliTracker - Pantau Oli Anda</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3063/3063822.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="app.js" defer></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        [x-cloak] { display: none !important; }
+        .scrollbar-none::-webkit-scrollbar { display: none; }
+        .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800" :class="darkMode ? 'dark bg-slate-950 text-slate-100' : ''" x-data="oliApp()">
+
+    <header class="bg-blue-600 dark:bg-blue-800 pb-28 pt-8 px-6 rounded-b-[40px] shadow-lg transition-colors duration-300">
+        <div class="max-w-md mx-auto flex justify-between items-center text-white">
+            <div>
+                <h1 class="text-2xl font-extrabold tracking-tight">UWI<span class="text-blue-200">Tracker</span></h1>
+                <p class="text-xs text-blue-100 opacity-80" x-text="activeTab === 'beranda' ? 'Monitoring Perawatan Motor UWI' : 'Analisis Grafik Keuangan'"></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click="toggleDarkMode()" class="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-2xl transition">
+                    <svg x-show="darkMode" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707m2.828 5.657a4 4 0 118 0 4 4 0 01-8 0z" />
+                    </svg>
+                    <svg x-show="!darkMode" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
+                <button @click="openAddModal()" class="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-2xl transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto px-6 -mt-20 pb-24">
+        
+        <div x-show="activeTab === 'beranda'" class="space-y-4">
+            <div class="bg-white rounded-3xl p-6 shadow-xl shadow-blue-100/40 dark:shadow-none border border-blue-50/50 dark:border-slate-800/80 overflow-hidden transition-colors duration-300 dark:bg-slate-900">
+                <div class="relative z-10">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <p class="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1 text-nowrap">Target KM Ganti Oli Mesin</p>
+                            <h2 class="text-4xl font-black text-blue-600 dark:text-blue-400" x-text="formatNumber(targetKm)">0</h2>
+                        </div>
+                        <div class="text-right">
+                            <label class="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1 tracking-tighter">KM Motor Sekarang</label>
+                            <input type="number" x-model="currentOdo" @input="calculateDashboard()" 
+                                   class="w-24 text-right bg-blue-50 dark:bg-slate-800 border-none rounded-lg text-blue-700 dark:text-blue-300 font-bold px-2 py-1 focus:ring-1 focus:ring-blue-400 outline-none">
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
+                            <span class="text-slate-400 dark:text-slate-500">Progress Pemakaian Oli</span>
+                            <span x-text="Math.round(progress) + '%'" :class="progress >= 85 ? 'text-red-500 font-extrabold' : 'text-blue-600 dark:text-blue-400'">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-500 shadow-sm" 
+                                 :style="`width: ${progress}%`" 
+                                 :class="progress >= 85 ? 'bg-red-500' : 'bg-blue-600 dark:bg-blue-500'">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex items-center gap-2">
+                        <div :class="sisaKm > 0 ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300' : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'" class="px-3 py-1 rounded-full text-[10px] font-bold italic">
+                            <span x-text="sisaKm > 0 ? `${formatNumber(sisaKm)} km lagi sebelum ganti` : `Sudah lewat ${formatNumber(Math.abs(sisaKm))} km!` "></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center pt-2 px-1">
+                <h3 class="font-extrabold text-slate-800 dark:text-slate-200">Riwayat Perawatan</h3>
+                <span class="bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] px-3 py-1 rounded-full font-bold uppercase" x-text="history.length + ' Catatan'"></span>
+            </div>
+
+            <div class="flex gap-1.5 overflow-x-auto pb-1.5 scrollbar-none">
+                <button @click="activeFilter = 'Semua'" :class="activeFilter === 'Semua' ? 'bg-blue-600 text-white shadow-md border-blue-600' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200/80 dark:border-slate-800'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all duration-200 whitespace-nowrap">Semua</button>
+                <button @click="activeFilter = 'Oli Mesin'" :class="activeFilter === 'Oli Mesin' ? 'bg-blue-600 text-white shadow-md border-blue-600' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200/80 dark:border-slate-800'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all duration-200 whitespace-nowrap">Oli Mesin</button>
+                <button @click="activeFilter = 'Oli Gardan'" :class="activeFilter === 'Oli Gardan' ? 'bg-teal-600 text-white shadow-md border-teal-600' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200/80 dark:border-slate-800'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all duration-200 whitespace-nowrap">Oli Gardan</button>
+                <button @click="activeFilter = 'Servis & Lainnya'" :class="activeFilter === 'Servis & Lainnya' ? 'bg-purple-600 text-white shadow-md border-purple-600' : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200/80 dark:border-slate-800'" class="px-4 py-2 rounded-xl text-xs font-bold border transition-all duration-200 whitespace-nowrap">Servis Umum</button>
+            </div>
+
+            <div class="space-y-4">
+                <template x-for="(item, index) in history" :key="index">
+                    <div x-show="activeFilter === 'Semua' || item.jenis === activeFilter"
+                         class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60 flex flex-col gap-3 group hover:bg-blue-50/40 dark:hover:bg-slate-800/40 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg hover:shadow-blue-100/80 dark:hover:shadow-none hover:-translate-y-1 transform transition-all duration-300 cursor-pointer text-slate-800 dark:text-slate-100 dark:bg-slate-900">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-4 flex-1 min-w-0">
+                                <div :class="item.jenis === 'Oli Mesin' ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' : item.jenis === 'Oli Gardan' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400' : 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400'" class="p-3.5 rounded-2xl transition shrink-0">
+                                    <template x-if="item.jenis === 'Oli Mesin'">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a7.5 7.5 0 01-7.5-7.5c0-4.142 7.5-11.5 7.5-11.5s7.5 7.358 7.5 11.5A7.5 7.5 0 0112 21z" />
+                                        </svg>
+                                    </template>
+                                    <template x-if="item.jenis === 'Oli Gardan'">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    </template>
+                                    <template x-if="item.jenis === 'Servis & Lainnya'">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+                                        </svg>
+                                    </template>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex flex-col gap-1">
+                                        <span x-text="item.jenis" :class="item.jenis === 'Oli Mesin' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' : item.jenis === 'Oli Gardan' ? 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800' : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'" class="w-max text-[9px] uppercase px-2.5 py-0.5 rounded-md font-extrabold tracking-wider border"></span>
+                                        <h4 class="font-extrabold text-slate-800 dark:text-slate-100 text-base tracking-tight capitalize break-words" x-text="item.merk"></h4>
+                                    </div>
+                                    <div class="mt-2 flex flex-col gap-1">
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium" x-text="formatDate(item.tanggal)"></p>
+                                        <p x-show="item.bengkel" class="text-xs text-blue-600 dark:text-blue-400 font-bold bg-blue-50/80 dark:bg-blue-950/40 px-2 py-0.5 rounded capitalize w-max max-w-full break-words" x-text="item.bengkel"></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right flex flex-col items-end justify-center gap-0.5 shrink-0 pl-2">
+                                <p x-show="item.jenis !== 'Servis & Lainnya' && item.km > 0" class="font-black text-slate-900 dark:text-slate-100 text-base tracking-tight whitespace-nowrap" x-text="formatNumber(item.km) + ' KM'"></p>
+                                <p class="font-black text-blue-600 dark:text-blue-400 text-base tracking-tight whitespace-nowrap" x-text="item.harga ? formatRupiah(item.harga) : 'Rp 0'"></p>
+                            </div>
+                        </div>
+                        
+                        <template x-if="item.catatan">
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                <span class="font-bold text-slate-700 dark:text-slate-300 block mb-0.5">Catatan Perawatan:</span> 
+                                <span x-text="item.catatan" class="italic"></span>
+                            </div>
+                        </template>
+                        
+                        <div class="flex justify-end gap-4 border-t border-slate-100 dark:border-slate-800 pt-2.5 mt-1 text-xs">
+                            <button @click.stop="openEditModal(index)" class="text-amber-500 hover:text-amber-600 font-bold tracking-wide transition">Ubah</button>
+                            <span class="text-slate-200 dark:text-slate-700">|</span>
+                            <button @click.stop="deleteEntry(index)" class="text-red-400 hover:text-red-500 font-bold tracking-wide transition">Hapus</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div x-show="activeTab === 'analisis'" class="space-y-4" x-cloak>
+            
+            <div class="bg-white rounded-3xl p-5 shadow-xl shadow-blue-100/30 dark:shadow-none border border-slate-100 dark:border-slate-800/80 transition-colors duration-300 dark:bg-slate-900">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <p class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-left">Filter Periode Biaya</p>
+                    <div class="flex gap-1.5">
+                        <select x-model="selectedMonth" @change="calculateDashboard()" class="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-600 outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+                            <option value="0">Januari</option>
+                            <option value="1">Februari</option>
+                            <option value="2">Maret</option>
+                            <option value="3">April</option>
+                            <option value="4">Mei</option>
+                            <option value="5">Juni</option>
+                            <option value="6">Juli</option>
+                            <option value="7">Agustus</option>
+                            <option value="8">September</option>
+                            <option value="9">Oktober</option>
+                            <option value="10">November</option>
+                            <option value="11">Desember</option>
+                        </select>
+                        <select x-model="selectedYear" @change="calculateDashboard()" class="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-600 outline-none focus:ring-1 focus:ring-blue-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+                            <template x-for="yr in availableYears" :key="yr">
+                                <option :value="yr" x-text="yr" :selected="yr == selectedYear"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+                    <div class="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100/70 dark:bg-slate-800/40 dark:border-slate-800/50">
+                        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight text-ellipsis overflow-hidden whitespace-nowrap" x-text="monthsFull[selectedMonth]"></p>
+                        <p class="text-sm font-black text-blue-600 dark:text-blue-400 mt-1 break-all" x-text="formatRupiah(biayaBulanTerpilih)"></p>
+                    </div>
+                    <div class="bg-slate-50/60 p-2.5 rounded-xl border border-slate-100/70 dark:bg-slate-800/40 dark:border-slate-800/50">
+                        <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight text-ellipsis overflow-hidden whitespace-nowrap" x-text="'Tahun ' + selectedYear"></p>
+                        <p class="text-sm font-black text-blue-600 dark:text-blue-400 mt-1 break-all" x-text="formatRupiah(biayaTahunTerpilih)"></p>
+                    </div>
+                    <div class="bg-slate-50/60 p-2.5 rounded-xl border border-blue-50 dark:border-slate-800 bg-blue-50/20 dark:bg-blue-950/20">
+                        <p class="text-[10px] font-bold text-blue-400 dark:text-blue-500 uppercase tracking-tight">Total Biaya</p>
+                        <p class="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1 break-all" x-text="formatRupiah(totalBiaya)"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/80 transition-colors duration-300 dark:bg-slate-900">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h4 class="text-xs font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Visualisasi Data</h4>
+                    </div>
+                    <div class="bg-slate-100 p-0.5 rounded-xl flex dark:bg-slate-800">
+                        <button @click="chartTab = 'pie'; $nextTick(() => triggerChartRender())" :class="chartTab === 'pie' ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-400'" class="px-3 py-1.5 text-xs font-bold rounded-lg transition">Porsi</button>
+                        <button @click="chartTab = 'bar'; $nextTick(() => triggerChartRender())" :class="chartTab === 'bar' ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-400'" class="px-3 py-1.5 text-xs font-bold rounded-lg transition">Tren</button>
+                    </div>
+                </div>
+
+                <div class="relative w-full h-60 flex items-center justify-center">
+                    <div x-show="chartTab === 'pie'" class="w-full h-full"><canvas id="categoryChart"></canvas></div>
+                    <div x-show="chartTab === 'bar'" class="w-full h-full"><canvas id="trendChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 dark:border-slate-800/80 transition-colors duration-300 space-y-3 dark:bg-slate-900">
+                <h4 class="text-xs font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Statistik Pintar (<span x-text="selectedYear"></span>)</h4>
+                
+                <div class="flex justify-between items-center bg-slate-50/60 p-4 rounded-2xl border border-slate-100/50 dark:bg-slate-800/30 dark:border-slate-800/50 cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-none hover:border-blue-300 dark:hover:border-blue-700 hover:bg-white dark:hover:bg-slate-800/60">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-red-50 text-red-600 rounded-xl shrink-0 dark:bg-red-950/40 dark:text-red-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                        </div>
+                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Bulan Terboros</span>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-black text-slate-900 capitalize dark:text-slate-100" x-text="bulanTerborosNama"></p> 
+                        <p x-show="bulanTerborosBiaya > 0" class="text-sm font-black text-red-500 mt-0.5" x-text="formatRupiah(bulanTerborosBiaya)"></p>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-50/60 p-4 rounded-2xl border border-slate-100/50 dark:bg-slate-800/30 dark:border-slate-800/50 cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-none hover:border-blue-300 dark:hover:border-blue-700 hover:bg-white dark:hover:bg-slate-800/60">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0 dark:bg-blue-950/40 dark:text-blue-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Rata-Rata Bulanan</span>
+                    </div>
+                    <p class="text-sm font-black text-blue-600 dark:text-blue-400" x-text="formatRupiah(rataRataBiaya)"></p>
+                </div>
+
+                <div class="flex justify-between items-center bg-slate-50/60 p-4 rounded-2xl border border-slate-100/50 dark:bg-slate-800/30 dark:border-slate-800/50 cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-none hover:border-blue-300 dark:hover:border-blue-700 hover:bg-white dark:hover:bg-slate-800/60">
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="p-2.5 bg-amber-50 text-amber-600 rounded-xl shrink-0 dark:bg-amber-950/40 dark:text-amber-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16c1.657 0 3-.895 3-2s-1.343-2-3-2-3 .895-3 2-1.343 2-3 2m0-8V7m0 8v1" />
+                            </svg>
+                        </div>
+                        <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Servis Termahal</span>
+                    </div>
+                    <div class="text-right max-w-[55%] min-w-0">
+                        <p class="text-sm font-black text-slate-900 truncate capitalize dark:text-slate-100" x-text="servisTermahalNama"></p>
+                        <p x-show="servisTermahalBiaya > 0" class="text-xs font-black text-amber-600 dark:text-amber-400 mt-0.5" x-text="formatRupiah(servisTermahalBiaya)"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <nav class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-200/60 px-8 py-2.5 z-40 flex justify-around items-center max-w-md mx-auto rounded-t-3xl shadow-2xl dark:bg-slate-900/90 dark:border-slate-800/80">
+        <button @click="activeTab = 'beranda'" :class="activeTab === 'beranda' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'" class="flex flex-col items-center gap-1 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <span class="text-[10px] font-bold tracking-tight">Beranda</span>
+        </button>
+        <button @click="activeTab = 'analisis'; $nextTick(() => triggerChartRender())" :class="activeTab === 'analisis' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'" class="flex flex-col items-center gap-1 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.003 9.003 0 1020.945 13H11V3.055z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+            </svg>
+            <span class="text-[10px] font-bold tracking-tight">Analisis</span>
+        </button>
+    </nav>
+
+    <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center px-6" x-cloak>
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" @click="showModal = false"></div>
+        <div class="bg-white w-full max-w-md p-6 rounded-[32px] shadow-2xl relative z-10 max-h-[90vh] overflow-y-auto border dark:border-slate-800 dark:bg-slate-900">
+            <h3 class="text-2xl font-black text-slate-800 dark:text-slate-100 mb-5" x-text="isEditMode ? 'Ubah Data Perawatan' : 'Tambah Data Perawatan'"></h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest">Jenis Perawatan</label>
+                    <select x-model="formData.jenis" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none font-semibold text-slate-700 dark:text-slate-300 focus:ring-1 focus:ring-blue-500">
+                        <option value="Oli Mesin">Oli Mesin</option>
+                        <option value="Oli Gardan">Oli Gardan</option>
+                        <option value="Servis & Lainnya">Servis & Lainnya</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest" x-text="formData.jenis === 'Servis & Lainnya' ? 'Nama Part / Jenis Servis' : 'Merk Oli'"></label>
+                    <input type="text" x-model="formData.merk" :placeholder="formData.jenis === 'Servis & Lainnya' ? 'Contoh: Ganti Ban Luar / Servis CVT' : 'Contoh: Shell Advance / SPX2'" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none dark:text-slate-100 placeholder-slate-400 focus:ring-1 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest" x-text="formData.jenis === 'Servis & Lainnya' ? 'Biaya Servis & Part (Rp)' : 'Harga Oli (Rp)'"></label>
+                    <input type="number" x-model="formData.harga" placeholder="0" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none dark:text-slate-100 focus:ring-1 focus:ring-blue-500">
+                </div>
+
+                <div :class="formData.jenis === 'Servis & Lainnya' ? 'block' : 'grid grid-cols-2 gap-3'">
+                    <div x-show="formData.jenis !== 'Servis & Lainnya'">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest">KM Saat Ini</label>
+                        <input type="number" x-model="formData.km" placeholder="0" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none dark:text-slate-100 focus:ring-1 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest">Tanggal Perawatan</label>
+                        <input type="date" x-model="formData.tanggal" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none dark:text-slate-100 focus:ring-1 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest">Bengkel Ganti / Tempat Servis</label>
+                    <input type="text" x-model="formData.bengkel" placeholder="Contoh: AHASS Adiwerna / Bengkel Motor Langganan" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none dark:text-slate-100 focus:ring-1 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 px-1 tracking-widest">Catatan Tambahan (Opsional)</label>
+                    <textarea x-model="formData.catatan" rows="2" placeholder="Contoh: Ganti ban dalam sekalian, spek luar ukuran 90/90-14 FDR" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl outline-none resize-none text-sm dark:text-slate-100 focus:ring-1 focus:ring-blue-500"></textarea>
+                </div>
+            </div>
+
+            <div class="mt-6 flex gap-3">
+                <button @click="showModal = false" class="flex-1 py-3.5 text-sm font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-2xl">Batal</button>
+                <button @click="saveEntry()" class="flex-[2] py-3.5 text-sm font-bold text-white bg-blue-600 rounded-2xl shadow-lg shadow-blue-200 dark:shadow-none" x-text="isEditMode ? 'Simpan Perubahan' : 'Simpan Data'"></button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
